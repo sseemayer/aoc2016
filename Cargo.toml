@@ -8,3 +8,5 @@ edition = "2018"
 
 [dependencies]
 snafu = "0.6.10"
+regex = "1.4.2"
+lazy_static = "1.4.0"
