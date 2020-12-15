@@ -41,12 +41,14 @@ type MapResult<T> = std::result::Result<T, MapError>;
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct Map<C: MapCoordinate, T> {
     pub data: HashMap<C, T>,
+    pub fixed_extent: Option<C>,
 }
 
 impl<C: MapCoordinate, T> Map<C, T> {
     pub fn new() -> Self {
         Map {
             data: HashMap::new(),
+            fixed_extent: None,
         }
     }
 
@@ -67,7 +69,11 @@ impl<C: MapCoordinate, T> Map<C, T> {
 
     /// Get the maximum dimension for all defined tiles
     pub fn get_extent(&self) -> C {
-        C::get_extent(self.data.keys().cloned())
+        if let Some(e) = &self.fixed_extent {
+            e.clone()
+        } else {
+            C::get_extent(self.data.keys().cloned())
+        }
     }
 
     /// Find all coordinates that match a predicate
@@ -120,7 +126,10 @@ impl<T: MapTile> Map<usize, T> {
             }
         }
 
-        Ok(Map { data })
+        Ok(Map {
+            data,
+            fixed_extent: None,
+        })
     }
 
     pub fn to_vecs(&self) -> Vec<Option<T>> {
@@ -161,7 +170,10 @@ impl<T: MapTile> Map<(usize, usize), T> {
             }
         }
 
-        Ok(Map { data })
+        Ok(Map {
+            data,
+            fixed_extent: None,
+        })
     }
 
     pub fn to_vecs(&self) -> Vec<Vec<Option<T>>> {
