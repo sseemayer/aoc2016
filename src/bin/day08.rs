@@ -122,7 +122,7 @@ impl Instruction {
                 }
             }
             Instruction::RotateColumn { x, by } => {
-                for i in 0..*by {
+                for _ in 0..*by {
                     // save the rightmost pixel
                     let save = map.get(&(HEIGHT - 1, *x)).is_some();
 
@@ -143,16 +143,16 @@ impl Instruction {
                 }
             }
             Instruction::RotateRow { y, by } => {
-                for i in 0..*by {
+                for _ in 0..*by {
                     // save the rightmost pixel
                     let save = map.get(&(*y, WIDTH - 1)).is_some();
 
                     for k in 1..WIDTH {
-                        let i = WIDTH - k;
-                        if map.get(&(*y, i - 1)).is_some() {
-                            map.set((*y, i), Tile);
+                        let j = WIDTH - k;
+                        if map.get(&(*y, j - 1)).is_some() {
+                            map.set((*y, j), Tile);
                         } else {
-                            map.remove(&(*y, i));
+                            map.remove(&(*y, j));
                         }
                     }
 
