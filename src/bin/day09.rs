@@ -18,7 +18,6 @@ fn get_decompressed_length(s: &str, expand_recursive: bool) -> Result<usize> {
     let mut pos = 0;
     let mut total_length = 0;
 
-    let mut stack: Vec<(usize, usize)> = Vec::new();
     let s: Vec<char> = s.chars().collect();
 
     while pos < s.len() {
