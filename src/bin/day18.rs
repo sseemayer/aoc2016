@@ -1,8 +1,4 @@
-use std::fs::File;
-
 use snafu::{ResultExt, Snafu};
-
-use aoc2016::map::{Map, MapError, MapTile};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -16,38 +12,6 @@ enum Error {
         data: String,
         source: std::num::ParseIntError,
     },
-
-    #[snafu(display("Map parsing error: {}", source))]
-    ParseMap { source: MapError },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum Tile {
-    Safe,
-    Trap,
-}
-
-impl MapTile for Tile {
-    fn from_char(c: char) -> Option<Self> {
-        match c {
-            '.' => Some(Tile::Safe),
-            '^' => Some(Tile::Trap),
-            _ => None,
-        }
-    }
-}
-
-impl std::fmt::Display for Tile {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Tile::Safe => ".",
-                Tile::Trap => "^",
-            }
-        )
-    }
 }
 
 fn generate(start_row: &[bool], rows: usize) -> usize {
