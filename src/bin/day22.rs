@@ -1,4 +1,7 @@
-use std::collections::{HashMap, VecDeque};
+use std::{
+    cmp::Reverse,
+    collections::{BinaryHeap, HashMap, VecDeque},
+};
 
 use snafu::{ResultExt, Snafu};
 
@@ -29,7 +32,7 @@ enum Error {
     ParseNode { data: String },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Node {
     x: i8,
     y: i8,
@@ -37,6 +40,7 @@ struct Node {
     used: u16,
     avail: u16,
     use_pct: u16,
+    contains_goal: bool,
 }
 
 impl std::str::FromStr for Node {
@@ -80,6 +84,7 @@ impl std::str::FromStr for Node {
             used,
             avail,
             use_pct,
+            contains_goal: false,
         })
     }
 }
@@ -90,68 +95,77 @@ impl Node {
     }
 }
 
-#[derive(Debug, Clone)]
-struct NodeStatus {
-    used: u16,
-}
-
-impl std::fmt::Display for NodeStatus {
+impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, " {:3}", self.used)
+        let symbol = if self.used > 100 {
+            "#"
+        } else if self.used < self.size / 2 {
+            "."
+        } else {
+            "/"
+        };
+
+        if self.contains_goal {
+            write!(f, "!{}", symbol)
+        } else {
+            write!(f, " {}", symbol)
+        }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct State {
-    map: Map<[i8; 2], NodeStatus>,
-    target_pos: [i8; 2],
+    steps: usize,
+    map: Map<[i8; 2], Node>,
+}
+
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Direction {
+    fn get_offset(&self) -> [i8; 2] {
+        match self {
+            Direction::Up => [-1, 0],
+            Direction::Down => [1, 0],
+            Direction::Left => [0, -1],
+            Direction::Right => [0, 1],
+        }
+    }
 }
 
 impl State {
-    fn get_neighbors(&self, node_defs: &HashMap<[i8; 2], Node>) -> Vec<State> {
-        let mut out = Vec::new();
+    fn make_move(&self, pos_source: &[i8; 2], direction: &Direction) -> Option<Self> {
+        let offset = direction.get_offset();
+        let pos_target = [pos_source[0] + offset[0], pos_source[1] + offset[1]];
 
-        let (min, max) = self.map.get_extent();
-        for i in min[0]..=max[0] {
-            for j in min[1]..=max[1] {
-                let pos_source = [i, j];
-                if let Some(stat_source) = self.map.get(&pos_source) {
-                    if stat_source.used <= 0 {
-                        continue;
-                    }
+        let old_source = self.map.get(pos_source)?;
+        let old_target = self.map.get(&pos_target)?;
 
-                    for (iofs, jofs) in &[(-1, 0), (1, 0), (0, -1), (0, 1)] {
-                        let pos_target = [i + iofs, j + jofs];
-
-                        if let Some(stat_target) = self.map.get(&pos_target) {
-                            let nd_target = &node_defs[&pos_target];
-
-                            if stat_target.used + stat_source.used <= nd_target.size {
-                                // move data from pos_source to pos_target
-
-                                let mut new_state = self.clone();
-                                new_state.map.set(pos_source, NodeStatus { used: 0 });
-                                new_state.map.set(
-                                    pos_target,
-                                    NodeStatus {
-                                        used: stat_target.used + stat_source.used,
-                                    },
-                                );
-
-                                // if moving the desired data, also update pointer
-                                if pos_source == self.target_pos {
-                                    new_state.target_pos = pos_target;
-                                }
-
-                                out.push(new_state);
-                            }
-                        }
-                    }
-                }
-            }
+        let sum = old_source.used + old_target.used;
+        if sum > old_target.size {
+            println!("Not enough space: {}", sum);
+            return None;
         }
 
-        out
+        let mut new_source = old_source.clone();
+        let mut new_target = old_target.clone();
+
+        new_target.used = sum;
+        new_source.used = 0;
+
+        new_target.contains_goal = new_source.contains_goal;
+        new_source.contains_goal = false;
+
+        let mut new_state = self.clone();
+        new_state.steps += 1;
+        new_state.map.set(*pos_source, new_source);
+        new_state.map.set(pos_target, new_target);
+
+        Some(new_state)
     }
 }
 
@@ -174,35 +188,85 @@ fn main() -> Result<()> {
     println!("Part 1: got {} viable pairs", n_viable);
 
     // convert to useful representation
-    let mut map: Map<[i8; 2], NodeStatus> = Map::new();
-    let mut node_defs: HashMap<[i8; 2], Node> = HashMap::new();
+    let mut map: Map<[i8; 2], Node> = Map::new();
     for n in nodes {
-        map.set([n.y, n.x], NodeStatus { used: n.used });
-        node_defs.insert([n.y, n.x], n);
+        map.set([n.y, n.x], n);
     }
 
     let (_, max) = map.get_extent();
-    let target_pos = [0, max[1]];
+    let mut target_pos = [0, max[1]];
+    map.get_mut(&target_pos).unwrap().contains_goal = true;
 
-    let initial_state = State { map, target_pos };
+    let mut empty_pos = None;
+    let mut empty_used = std::u16::MAX;
+    for (pos, n) in map.data.iter() {
+        if n.used < empty_used {
+            empty_pos = Some(pos);
+            empty_used = n.used;
+        }
+    }
 
-    let mut queue = VecDeque::new();
-    queue.push_back((0, initial_state));
+    let mut empty_pos = *empty_pos.expect("Found empty");
+    let mut state = State { map, steps: 0 };
 
-    let mut max_steps = 0;
-    while let Some((steps, current)) = queue.pop_front() {
-        if steps > max_steps {
-            max_steps = steps;
-            println!("{}", steps);
+    println!("step {}:\n{}\n{:?}", state.steps, state.map, empty_pos);
+    for _ in 0..4 {
+        state = state
+            .make_move(&[empty_pos[0], empty_pos[1] - 1], &Direction::Right)
+            .expect("valid move");
+        empty_pos[1] -= 1;
+        println!("step {}:\n{}\n{:?}", state.steps, state.map, empty_pos);
+    }
+
+    while empty_pos[0] > 0 {
+        state = state
+            .make_move(&[empty_pos[0] - 1, empty_pos[1]], &Direction::Down)
+            .expect("valid move");
+        empty_pos[0] -= 1;
+        println!("step {}:\n{}\n{:?}", state.steps, state.map, empty_pos);
+    }
+
+    while empty_pos[1] < target_pos[1] - 1 {
+        state = state
+            .make_move(&[empty_pos[0], empty_pos[1] + 1], &Direction::Left)
+            .expect("valid move");
+        empty_pos[1] += 1;
+        println!("step {}:\n{}\n{:?}", state.steps, state.map, empty_pos);
+    }
+
+    while target_pos[1] > 0 {
+        state = state
+            .make_move(&target_pos, &Direction::Left)
+            .expect("valid move");
+        target_pos[1] -= 1;
+        empty_pos[1] += 1;
+
+        println!("step {}:\n{}\n{:?}", state.steps, state.map, empty_pos);
+
+        if target_pos[1] == 0 {
+            break;
         }
 
-        if current.target_pos == [0, 0] {
-            println!("{}\nPart 2: found solution in {} steps", current.map, steps);
+        state = state
+            .make_move(&[empty_pos[0] + 1, empty_pos[1]], &Direction::Up)
+            .expect("valid move");
+        empty_pos[0] += 1;
+
+        println!("step {}:\n{}\n{:?}", state.steps, state.map, empty_pos);
+
+        for _ in 0..2 {
+            state = state
+                .make_move(&[empty_pos[0], empty_pos[1] - 1], &Direction::Right)
+                .expect("valid move");
+            empty_pos[1] -= 1;
+            println!("step {}:\n{}\n{:?}", state.steps, state.map, empty_pos);
         }
 
-        for n in current.get_neighbors(&node_defs) {
-            queue.push_back((steps + 1, n));
-        }
+        state = state
+            .make_move(&[empty_pos[0] - 1, empty_pos[1]], &Direction::Down)
+            .expect("valid move");
+        empty_pos[0] -= 1;
+        println!("step {}:\n{}\n{:?}", state.steps, state.map, empty_pos);
     }
 
     Ok(())

@@ -89,6 +89,11 @@ impl<C: MapCoordinate, T> Map<C, T> {
         self.data.get(coord)
     }
 
+    /// Get a mutable reference to a tile at a coordinate
+    pub fn get_mut(&mut self, coord: &C) -> Option<&mut T> {
+        self.data.get_mut(coord)
+    }
+
     /// Set the tile at a coordinate
     pub fn set(&mut self, coord: C, value: T) {
         self.data.insert(coord, value);
