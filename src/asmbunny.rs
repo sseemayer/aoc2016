@@ -14,7 +14,7 @@ pub enum AsmError {
     ParseInstruction { data: String },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Source {
     Constant { value: i64 },
     Register { id: String },
@@ -31,12 +31,18 @@ impl std::str::FromStr for Source {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Instruction {
-    Cpy { source: Source, register: String },
-    Inc { register: String },
-    Dec { register: String },
-    Jnz { source: Source, offset: i64 },
+    // Cpy -> Jnz
+    Cpy { source: Source, register: Source },
+    // Inc -> Dec
+    Inc { register: Source },
+    // Dec -> Inc
+    Dec { register: Source },
+    // Jnz -> Cpy
+    Jnz { source: Source, offset: Source },
+    // Tgl -> Inc
+    Tgl { offset: Source },
 }
 
 impl std::str::FromStr for Instruction {
@@ -47,23 +53,25 @@ impl std::str::FromStr for Instruction {
         Ok(match &tokens[..] {
             &["cpy", source, register] => {
                 let source: Source = source.parse()?;
-                let register = register.to_string();
+                let register = register.parse()?;
                 Instruction::Cpy { source, register }
             }
             &["inc", register] => {
-                let register = register.to_string();
+                let register = register.parse()?;
                 Instruction::Inc { register }
             }
             &["dec", register] => {
-                let register = register.to_string();
+                let register = register.parse()?;
                 Instruction::Dec { register }
             }
             &["jnz", source, offset] => {
                 let source = source.parse()?;
-                let offset: i64 = offset.parse().context(ParseInt {
-                    data: offset.to_string(),
-                })?;
+                let offset = offset.parse()?;
                 Instruction::Jnz { source, offset }
+            }
+            &["tgl", offset] => {
+                let offset = offset.parse()?;
+                Instruction::Tgl { offset }
             }
             _ => {
                 return Err(AsmError::ParseInstruction {
@@ -89,6 +97,16 @@ impl State {
         }
     }
 
+    pub fn get_instruction(&self, pos: i64) -> Option<Instruction> {
+        if pos < 0 {
+            return None;
+        }
+        if pos as usize >= self.instructions.len() {
+            return None;
+        }
+        self.instructions.get(pos as usize).cloned()
+    }
+
     pub fn get_value(&mut self, source: &Source) -> i64 {
         match source {
             Source::Constant { value } => *value,
@@ -96,26 +114,78 @@ impl State {
         }
     }
 
-    pub fn step(&mut self, inst: &Instruction) {
-        match inst {
+    pub fn set_value(&mut self, source: &Source, value: i64) {
+        match source {
+            Source::Constant { .. } => { /* ignore setting to a constant */ }
+            Source::Register { id } => {
+                self.registers.insert(id.clone(), value);
+            }
+        }
+    }
+
+    pub fn step_turbo<F: Fn(&mut Self) -> Option<bool>>(&mut self, speed_patch: F) -> bool {
+        if let Some(ret) = speed_patch(self) {
+            ret
+        } else {
+            self.step()
+        }
+    }
+
+    pub fn step(&mut self) -> bool {
+        let inst = self.get_instruction(self.ic);
+        if inst.is_none() {
+            return false;
+        }
+
+        match inst.unwrap() {
             Instruction::Cpy { source, register } => {
-                let value = self.get_value(source);
-                self.registers.insert(register.clone(), value);
+                let value = self.get_value(&source);
+                self.set_value(&register, value);
             }
             Instruction::Inc { register } => {
-                *self.registers.entry(register.clone()).or_insert(0) += 1;
+                let value = self.get_value(&register);
+                self.set_value(&register, value + 1);
             }
             Instruction::Dec { register } => {
-                *self.registers.entry(register.clone()).or_insert(0) -= 1;
+                let value = self.get_value(&register);
+                self.set_value(&register, value - 1);
             }
             Instruction::Jnz { source, offset } => {
-                let value = self.get_value(source);
+                let value = self.get_value(&source);
+                let ofs = self.get_value(&offset);
                 if value != 0 {
-                    self.ic += offset;
-                    return;
+                    self.ic += ofs;
+                    return true;
+                }
+            }
+            Instruction::Tgl { offset } => {
+                let ofs = self.get_value(&offset);
+
+                if let Some(inst) = self.get_instruction(self.ic + ofs) {
+                    let new_inst: Instruction = match inst {
+                        Instruction::Cpy { source, register } => Instruction::Jnz {
+                            source: source.clone(),
+                            offset: register.clone(),
+                        },
+                        Instruction::Inc { register } => Instruction::Dec {
+                            register: register.clone(),
+                        },
+                        Instruction::Dec { register } => Instruction::Inc {
+                            register: register.clone(),
+                        },
+                        Instruction::Jnz { source, offset } => Instruction::Cpy {
+                            source: source.clone(),
+                            register: offset.clone(),
+                        },
+                        Instruction::Tgl { offset } => Instruction::Inc {
+                            register: offset.clone(),
+                        },
+                    };
+                    self.instructions[(self.ic + ofs) as usize] = new_inst;
                 }
             }
         }
         self.ic += 1;
+        true
     }
 }
