@@ -1,6 +1,6 @@
 use snafu::{ResultExt, Snafu};
 
-use aoc2016::map::{Map, MapTile};
+use aoc2016::map::Map;
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -21,16 +21,6 @@ enum Error {
 
 #[derive(Debug, Clone)]
 struct Tile;
-
-impl MapTile for Tile {
-    fn from_char(c: char) -> Option<Self> {
-        if c == '#' {
-            Some(Tile)
-        } else {
-            None
-        }
-    }
-}
 
 impl std::fmt::Display for Tile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -112,54 +102,54 @@ const WIDTH: usize = 50;
 const HEIGHT: usize = 6;
 
 impl Instruction {
-    fn apply_to(&self, map: &mut Map<(usize, usize), Tile>) {
+    fn apply_to(&self, map: &mut Map<[usize; 2], Tile>) {
         match self {
             Instruction::Rect { width, height } => {
                 for i in 0..*height {
                     for j in 0..*width {
-                        map.set((i, j), Tile);
+                        map.set([i, j], Tile);
                     }
                 }
             }
             Instruction::RotateColumn { x, by } => {
                 for _ in 0..*by {
                     // save the rightmost pixel
-                    let save = map.get(&(HEIGHT - 1, *x)).is_some();
+                    let save = map.get(&[HEIGHT - 1, *x]).is_some();
 
                     for k in 1..HEIGHT {
                         let i = HEIGHT - k;
-                        if map.get(&(i - 1, *x)).is_some() {
-                            map.set((i, *x), Tile);
+                        if map.get(&[i - 1, *x]).is_some() {
+                            map.set([i, *x], Tile);
                         } else {
-                            map.remove(&(i, *x));
+                            map.remove(&[i, *x]);
                         }
                     }
 
                     if save {
-                        map.set((0, *x), Tile);
+                        map.set([0, *x], Tile);
                     } else {
-                        map.remove(&(0, *x));
+                        map.remove(&[0, *x]);
                     }
                 }
             }
             Instruction::RotateRow { y, by } => {
                 for _ in 0..*by {
                     // save the rightmost pixel
-                    let save = map.get(&(*y, WIDTH - 1)).is_some();
+                    let save = map.get(&[*y, WIDTH - 1]).is_some();
 
                     for k in 1..WIDTH {
                         let j = WIDTH - k;
-                        if map.get(&(*y, j - 1)).is_some() {
-                            map.set((*y, j), Tile);
+                        if map.get(&[*y, j - 1]).is_some() {
+                            map.set([*y, j], Tile);
                         } else {
-                            map.remove(&(*y, j));
+                            map.remove(&[*y, j]);
                         }
                     }
 
                     if save {
-                        map.set((*y, 0), Tile);
+                        map.set([*y, 0], Tile);
                     } else {
-                        map.remove(&(*y, 0));
+                        map.remove(&[*y, 0]);
                     }
                 }
             }
@@ -174,8 +164,8 @@ fn main() -> Result<()> {
         .map(|l| l.parse())
         .collect::<Result<_>>()?;
 
-    let mut state: Map<(usize, usize), Tile> = Map::new();
-    state.fixed_extent = Some((HEIGHT, WIDTH));
+    let mut state: Map<[usize; 2], Tile> = Map::new();
+    state.fixed_extent = Some(([0, 0], [HEIGHT, WIDTH]));
 
     for inst in instructions {
         inst.apply_to(&mut state);

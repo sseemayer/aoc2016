@@ -1,4 +1,4 @@
-use aoc2016::map::{Map, MapTile};
+use aoc2016::map::Map;
 use snafu::{ResultExt, Snafu};
 
 type Result<T> = std::result::Result<T, Error>;
@@ -71,19 +71,8 @@ impl std::fmt::Display for Tile {
     }
 }
 
-impl MapTile for Tile {
-    fn from_char(c: char) -> Option<Self> {
-        Some(match c {
-            'O' => Tile::Visited,
-            '.' => Tile::Free,
-            '#' => Tile::Blocked,
-            _ => return None,
-        })
-    }
-}
-
 fn main() -> Result<()> {
-    let mut map: Map<(usize, usize), Tile> = Map::new();
+    let mut map: Map<[usize; 2], Tile> = Map::new();
     let input = 1358;
     let start = (1, 1);
 
@@ -111,15 +100,15 @@ fn main() -> Result<()> {
             println!("In 50 turns, visited {} spaces", visited);
         }
 
-        map.set((pos.1, pos.0), Tile::Visited);
+        map.set([pos.1, pos.0], Tile::Visited);
 
         for neighbor in get_neighbors(pos.0, pos.1) {
-            match map.get(&(neighbor.1, neighbor.0)) {
+            match map.get(&[neighbor.1, neighbor.0]) {
                 Some(_) => {}
                 None => {
                     let blocked = is_filled(neighbor.0, neighbor.1, input);
                     map.set(
-                        (neighbor.1, neighbor.0),
+                        [neighbor.1, neighbor.0],
                         if blocked { Tile::Blocked } else { Tile::Free },
                     );
                     if !blocked {

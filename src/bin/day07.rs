@@ -164,7 +164,7 @@ mod tests {
                 .parse::<Address>()
                 .unwrap()
                 .supports_tls(),
-            false
+            true
         );
         Ok(())
     }

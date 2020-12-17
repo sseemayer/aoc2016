@@ -1,6 +1,6 @@
 use snafu::{ResultExt, Snafu};
 
-use aoc2016::map::{Map, MapError, MapTile};
+use aoc2016::map::{Map, MapError, ParseMapTile};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Tile {
@@ -13,7 +13,7 @@ impl std::fmt::Display for Tile {
     }
 }
 
-impl MapTile for Tile {
+impl ParseMapTile for Tile {
     fn from_char(c: char) -> Option<Self> {
         if c == ' ' {
             None
@@ -60,39 +60,35 @@ impl std::str::FromStr for Direction {
 }
 
 impl Direction {
-    fn walk(&self, pos: &(i64, i64)) -> (i64, i64) {
-        let i = pos.0;
-        let j = pos.1;
+    fn walk(&self, pos: &[i64; 2]) -> [i64; 2] {
+        let [i, j] = pos;
 
         match self {
-            Direction::Up => (i - 1, j),
-            Direction::Down => (i + 1, j),
-            Direction::Left => (i, j - 1),
-            Direction::Right => (i, j + 1),
+            Direction::Up => [i - 1, *j],
+            Direction::Down => [i + 1, *j],
+            Direction::Left => [*i, j - 1],
+            Direction::Right => [*i, j + 1],
         }
     }
 }
 
 fn follow_instructions(
-    map: &Map<(usize, usize), Tile>,
-    start_pos: (usize, usize),
+    map: &Map<[i64; 2], Tile>,
+    start_pos: [i64; 2],
     instructions: &Vec<Vec<Direction>>,
 ) -> String {
     let mut out: String = String::new();
-    let mut pos = (start_pos.0 as i64, start_pos.1 as i64);
+    let mut pos = start_pos.clone();
 
     for line in instructions {
         for d in line {
             let new_pos = d.walk(&pos);
-            if new_pos.0 >= 0
-                && new_pos.1 >= 0
-                && map.get(&(new_pos.0 as usize, new_pos.1 as usize)).is_some()
-            {
+            if map.get(&new_pos).is_some() {
                 pos = new_pos;
             }
         }
 
-        if let Some(t) = map.get(&(pos.0 as usize, pos.1 as usize)) {
+        if let Some(t) = map.get(&pos) {
             out.push(t.c);
         }
     }
@@ -112,12 +108,12 @@ fn main() -> Result<()> {
         })
         .collect::<Result<_>>()?;
 
-    let keypad1: Map<(usize, usize), Tile> = "123\n456\n789".parse().context(ParseMap)?;
+    let keypad1: Map<[i64; 2], Tile> = "123\n456\n789".parse().context(ParseMap)?;
     let five_pos1 = keypad1.find_one(&Tile { c: '5' }).expect("Need 5 key");
     let digits1 = follow_instructions(&keypad1, five_pos1, &instructions);
     println!("Part 1: {}", digits1);
 
-    let keypad2: Map<(usize, usize), Tile> = "  1  \n 234 \n56789\n ABC \n  D  "
+    let keypad2: Map<[i64; 2], Tile> = "  1  \n 234 \n56789\n ABC \n  D  "
         .parse()
         .context(ParseMap)?;
     let five_pos2 = keypad2.find_one(&Tile { c: '5' }).expect("Need 5 key");
