@@ -14,10 +14,10 @@ pub enum AsmError {
     ParseInstruction { data: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Source {
     Constant { value: i64 },
-    Register { id: String },
+    Register { id: usize },
 }
 
 impl std::str::FromStr for Source {
@@ -26,12 +26,14 @@ impl std::str::FromStr for Source {
         Ok(if let Ok(value) = s.parse::<i64>() {
             Source::Constant { value }
         } else {
-            Source::Register { id: s.to_string() }
+            Source::Register {
+                id: "abcdefghijklmnopqrstuvwxyz".find(s).unwrap(),
+            }
         })
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Instruction {
     // Cpy -> Jnz
     Cpy { source: Source, register: Source },
@@ -43,6 +45,8 @@ pub enum Instruction {
     Jnz { source: Source, offset: Source },
     // Tgl -> Inc
     Tgl { offset: Source },
+    // Out -> Inc
+    Out { source: Source },
 }
 
 impl std::str::FromStr for Instruction {
@@ -73,6 +77,10 @@ impl std::str::FromStr for Instruction {
                 let offset = offset.parse()?;
                 Instruction::Tgl { offset }
             }
+            &["out", source] => {
+                let source = source.parse()?;
+                Instruction::Out { source }
+            }
             _ => {
                 return Err(AsmError::ParseInstruction {
                     data: s.to_string(),
@@ -82,17 +90,25 @@ impl std::str::FromStr for Instruction {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct State {
     pub ic: i64,
-    pub registers: HashMap<String, i64>,
+    pub registers: Vec<i64>,
     pub instructions: Vec<Instruction>,
+}
+
+pub enum StepResult {
+    OutOfProgram,
+    OkNoOutput,
+    OkOutput { out: i64 },
 }
 
 impl State {
     pub fn from_instructions(instructions: Vec<Instruction>) -> Self {
+        let registers = (0..26).map(|_| 0).collect();
         State {
             instructions,
+            registers,
             ..Default::default()
         }
     }
@@ -110,7 +126,7 @@ impl State {
     pub fn get_value(&mut self, source: &Source) -> i64 {
         match source {
             Source::Constant { value } => *value,
-            Source::Register { id } => *self.registers.entry(id.clone()).or_insert(0),
+            Source::Register { id } => self.registers[*id],
         }
     }
 
@@ -118,12 +134,15 @@ impl State {
         match source {
             Source::Constant { .. } => { /* ignore setting to a constant */ }
             Source::Register { id } => {
-                self.registers.insert(id.clone(), value);
+                self.registers[*id] = value;
             }
         }
     }
 
-    pub fn step_turbo<F: Fn(&mut Self) -> Option<bool>>(&mut self, speed_patch: F) -> bool {
+    pub fn step_turbo<F: Fn(&mut Self) -> Option<StepResult>>(
+        &mut self,
+        speed_patch: F,
+    ) -> StepResult {
         if let Some(ret) = speed_patch(self) {
             ret
         } else {
@@ -131,10 +150,10 @@ impl State {
         }
     }
 
-    pub fn step(&mut self) -> bool {
+    pub fn step(&mut self) -> StepResult {
         let inst = self.get_instruction(self.ic);
         if inst.is_none() {
-            return false;
+            return StepResult::OutOfProgram;
         }
 
         match inst.unwrap() {
@@ -155,7 +174,7 @@ impl State {
                 let ofs = self.get_value(&offset);
                 if value != 0 {
                     self.ic += ofs;
-                    return true;
+                    return StepResult::OkNoOutput;
                 }
             }
             Instruction::Tgl { offset } => {
@@ -180,12 +199,20 @@ impl State {
                         Instruction::Tgl { offset } => Instruction::Inc {
                             register: offset.clone(),
                         },
+                        Instruction::Out { source } => Instruction::Inc {
+                            register: source.clone(),
+                        },
                     };
                     self.instructions[(self.ic + ofs) as usize] = new_inst;
                 }
             }
+            Instruction::Out { source } => {
+                let out = self.get_value(&source);
+                self.ic += 1;
+                return StepResult::OkOutput { out };
+            }
         }
         self.ic += 1;
-        true
+        StepResult::OkNoOutput
     }
 }

@@ -1,6 +1,6 @@
 use snafu::{ResultExt, Snafu};
 
-use aoc2016::asmbunny::{AsmError, Instruction, State};
+use aoc2016::asmbunny::{AsmError, Instruction, State, StepResult};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -67,7 +67,7 @@ fn main() -> Result<()> {
 
                 s.ic += 5;
 
-                return Some(true);
+                return Some(StepResult::OkNoOutput);
             }
             None
         });
