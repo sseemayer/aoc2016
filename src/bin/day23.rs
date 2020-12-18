@@ -26,15 +26,15 @@ fn main() -> Result<()> {
     //     .collect::<Result<_>>()?;
 
     let mut state = State::from_instructions(instructions.clone());
-    state.registers.insert("a".to_string(), 7);
+    state.registers[0] = 7;
     while let Some(_inst) = state.get_instruction(state.ic) {
         // println!("{:3} {:?} {:?}", state.ic, inst, state.registers);
         state.step();
     }
-    println!("Part 1: {:#?}", state.registers["a"]);
+    println!("Part 1: {:#?}", state.registers[0]);
 
     let mut state = State::from_instructions(instructions.clone());
-    state.registers.insert("a".to_string(), 12);
+    state.registers[0] = 12;
     while let Some(_inst) = state.get_instruction(state.ic) {
         // println!("{:3} {:?} {:?}", state.ic, inst, state.registers);
         state.step_turbo(|s| {
@@ -56,14 +56,14 @@ fn main() -> Result<()> {
 
                 // we have now determined that the next 5 instructions match.
                 // run fast program instead.
-                let a = s.registers["a"];
-                let c = s.registers["c"];
-                let d = s.registers["d"];
+                let a = s.registers[0];
+                let c = s.registers[2];
+                let d = s.registers[3];
                 // println!("TURBO: a = {} + {} * {} ", a, c, d);
 
-                s.registers.insert("a".to_string(), a + c * d);
-                s.registers.insert("c".to_string(), 0);
-                s.registers.insert("d".to_string(), 0);
+                s.registers[0] = a + c * d;
+                s.registers[2] = 0;
+                s.registers[3] = 0;
 
                 s.ic += 5;
 
@@ -72,7 +72,7 @@ fn main() -> Result<()> {
             None
         });
     }
-    println!("Part 2: {:#?}", state.registers["a"]);
+    println!("Part 2: {:#?}", state.registers[0]);
     Ok(())
 }
 

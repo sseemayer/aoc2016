@@ -22,20 +22,18 @@ fn main() -> Result<()> {
 
     let mut state = State::from_instructions(instructions.clone());
     while (state.ic >= 0) && (state.ic < instructions.len() as i64) {
-        let inst = &instructions[state.ic as usize];
-        state.step(inst);
+        state.step();
     }
 
-    println!("Part 1: {:#?}", state.registers["a"]);
+    println!("Part 1: {:#?}", state.registers[0]);
 
     let mut state: State = State::from_instructions(instructions.clone());
-    state.registers.insert("c".to_string(), 1);
+    state.registers[2] = 1;
     while (state.ic >= 0) && (state.ic < instructions.len() as i64) {
-        let inst = &instructions[state.ic as usize];
-        state.step(inst);
+        state.step();
     }
 
-    println!("Part 2: {:#?}", state.registers["a"]);
+    println!("Part 2: {:#?}", state.registers[0]);
 
     Ok(())
 }
